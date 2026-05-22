@@ -33,21 +33,18 @@ const BookingSchema = new Schema<IBooking>(
 );
 
 // ── Pre-save hook ─────────────────────────────────────────────────────────────
-BookingSchema.pre<IBooking>("save", async function (next) {
+// Async hooks in Mongoose v9 do not use next() — throw to signal failure
+BookingSchema.pre("save", async function (this: IBooking) {
   // Guard: only run the DB lookup when eventId is new or has changed
-  if (!this.isModified("eventId")) return next();
+  if (!this.isModified("eventId")) return;
 
   const eventExists = await mongoose
     .model("Event")
     .exists({ _id: this.eventId });
 
   if (!eventExists) {
-    return next(
-      new Error(`Referenced event not found: ${this.eventId.toString()}`)
-    );
+    throw new Error(`Referenced event not found: ${this.eventId.toString()}`);
   }
-
-  next();
 });
 
 const Booking: Model<IBooking> =

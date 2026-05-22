@@ -89,10 +89,13 @@ const EventSchema = new Schema<IEvent>(
 );
 
 // ── Pre-save hook ─────────────────────────────────────────────────────────────
-EventSchema.pre<IEvent>("save", function (next) {
+// Async middleware in Mongoose v9 — throw to signal failure, no next() needed
+EventSchema.pre("save", async function () {
+  const doc = this as unknown as IEvent;
+
   // Regenerate slug only when title changes to avoid breaking existing URLs
-  if (this.isModified("title")) {
-    this.slug = this.title
+  if (doc.isModified("title")) {
+    doc.slug = doc.title
       .toLowerCase()
       .trim()
       .replace(/[^a-z0-9\s-]/g, "")   // strip non-alphanumeric chars
@@ -101,27 +104,23 @@ EventSchema.pre<IEvent>("save", function (next) {
   }
 
   // Normalize date to ISO 8601 (YYYY-MM-DD) — rejects unparseable values
-  if (this.isModified("date")) {
-    const parsed = new Date(this.date);
+  if (doc.isModified("date")) {
+    const parsed = new Date(doc.date);
     if (isNaN(parsed.getTime())) {
-      return next(new Error(`Invalid date value: "${this.date}"`));
+      throw new Error(`Invalid date value: "${doc.date}"`);
     }
-    this.date = parsed.toISOString().split("T")[0];
+    doc.date = parsed.toISOString().split("T")[0];
   }
 
   // Normalize time to HH:MM 24-hour format using a simple regex guard
-  if (this.isModified("time")) {
+  if (doc.isModified("time")) {
     const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
-    if (!timeRegex.test(this.time)) {
-      return next(
-        new Error(
-          `Invalid time format: "${this.time}". Expected HH:MM (24-hour).`
-        )
+    if (!timeRegex.test(doc.time)) {
+      throw new Error(
+        `Invalid time format: "${doc.time}". Expected HH:MM (24-hour).`
       );
     }
   }
-
-  next();
 });
 
 const Event: Model<IEvent> =
